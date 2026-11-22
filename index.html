@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>同传工作台 · SimulCast</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="%235B8CFF"/><path d="M14 32h6l4-12 6 24 5-18 4 6h11" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'>
+<style>
+:root{
+  --bg:#0C0E12; --panel:#15181E; --panel2:#1A1E26; --line:rgba(255,255,255,.075);
+  --line2:rgba(255,255,255,.12); --ink:#E8ECF2; --muted:#8A93A0; --dim:#5C6572;
+  --accent:#5B8CFF; --accent-soft:rgba(91,140,255,.16); --amber:#F2C86B; --amber-soft:rgba(242,200,107,.14);
+  --red:#FF5A5A; --green:#3DD68C;
+  --mono:"Cascadia Mono","Consolas","JetBrains Mono",ui-monospace,monospace;
+  --sans:-apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --r:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--sans);color:var(--ink);background:var(--bg);
+  background-image:radial-gradient(900px 380px at 50% -120px,rgba(91,140,255,.10),transparent 70%);
+  display:flex;justify-content:center;align-items:center;padding:16px;
+}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
+input,textarea,select{font-family:inherit;color:var(--ink)}
+svg.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ═════ 应用外壳 ═════ */
+#app{
+  width:min(960px,100%);height:calc(100dvh - 32px);max-height:980px;
+  display:flex;flex-direction:column;
+  background:linear-gradient(180deg,#161A21,#111318 62%);
+  border:1px solid var(--line);border-radius:20px;overflow:hidden;
+  box-shadow:0 40px 90px -30px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+/* ─── 头部 ─── */
+header{display:flex;align-items:center;gap:14px;padding:16px 20px 12px;border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
+.recwrap{display:flex;align-items:center;gap:9px;flex:none}
+.rec{width:9px;height:9px;border-radius:50%;background:var(--dim);flex:none;transition:background .3s}
+.on .rec{background:var(--red);animation:blink 1.5s infinite}
+#timer{font-family:var(--mono);font-size:21px;font-weight:600;letter-spacing:.5px;font-variant-numeric:tabular-nums;min-width:98px}
+#title{
+  background:transparent;border:1px solid transparent;border-radius:9px;padding:4px 9px;
+  font-size:14px;font-weight:600;color:var(--ink);max-width:300px;min-width:120px;flex:1;
+  transition:border-color .2s,background .2s;
+}
+#title:hover{border-color:var(--line2)}
+#title:focus{outline:none;border-color:var(--accent);background:rgba(91,140,255,.07)}
+.hright{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--muted);
+  background:rgba(255,255,255,.045);border:1px solid var(--line);padding:4px 10px;border-radius:20px;white-space:nowrap;
+}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex:none}
+.chip.err .dot{background:var(--red)}
+.chip svg.ic{width:12px;height:12px;color:var(--accent)}
+.iconbtn{
+  width:32px;height:32px;border-radius:10px;display:grid;place-items:center;color:var(--muted);
+  background:rgba(255,255,255,.045);border:1px solid var(--line);transition:.2s;
+}
+.iconbtn:hover{color:var(--ink);border-color:var(--line2);background:rgba(255,255,255,.08)}
+
+/* ─── 指标 ─── */
+#stats{display:flex;margin:14px 20px 0;background:rgba(255,255,255,.032);border:1px solid var(--line);border-radius:var(--r);padding:11px 0;flex:none}
+#stats>div{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
+#stats>div+div{border-left:1px solid var(--line)}
+.statnum{font-family:var(--mono);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;color:#fff}
+.statlbl{font-size:11px;color:var(--muted)}
+
+/* ─── 标签页 ─── */
+#tabs{display:flex;gap:2px;background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:11px;padding:3px;margin:12px 20px 0;flex:none;width:fit-content}
+.tab{height:30px;padding:0 18px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--muted);transition:.2s}
+.tab.active{background:var(--accent-soft);color:#fff}
+.tab:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* ─── 面板 ─── */
+.panel{flex:1;min-height:0;display:none;flex-direction:column;margin:12px 20px 0}
+.panel.active{display:flex}
+.scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:2px 4px 8px;scroll-behavior:smooth}
+.scroll::-webkit-scrollbar{width:8px}
+.scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.10);border-radius:4px}
+.scroll::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.16)}
+.scroll::-webkit-scrollbar-track{background:transparent}
+
+.empty{margin:auto;text-align:center;color:var(--dim);font-size:13px;line-height:2;padding:30px 10px}
+.empty svg.ic{width:30px;height:30px;stroke-width:1.4;color:var(--dim);margin-bottom:8px}
+.empty b{color:var(--muted);font-weight:600}
+
+/* 实时条目 */
+.entry{padding:10px 14px;border-left:2px solid transparent;border-radius:12px;opacity:.62;transition:opacity .5s,border-color .4s,background .4s;animation:rise .35s ease both}
+.entry.live{background:rgba(255,255,255,.045);border-left-color:var(--accent);opacity:1}
+.e-top{display:flex;align-items:baseline;gap:10px}
+.e-src{flex:1;min-width:0;font-size:12.5px;line-height:1.6;color:var(--muted)}
+.e-meta{display:flex;align-items:center;gap:7px;flex:none;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+.pill{font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:20px;background:rgba(255,255,255,.06);color:var(--muted);white-space:nowrap}
+.pill.llm{color:#BFD2FF;background:var(--accent-soft)}
+.e-dst{margin-top:3px;font-size:15px;line-height:1.7;font-weight:500;color:var(--ink)}
+em.term{font-style:normal;color:var(--amber);background:var(--amber-soft);border-radius:4px;padding:0 4px}
+.shimmer{color:var(--dim);background:linear-gradient(90deg,var(--dim) 30%,var(--muted) 50%,var(--dim) 70%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 1.2s linear infinite}
+.e-dst.fail{color:#FF9A9A;font-size:13px}
+.e-retry{font-size:11.5px;color:var(--accent);text-decoration:underline;margin-left:8px}
+.e-retry:hover{color:#8FB0FF}
+.entry.mark{display:flex;align-items:center;gap:8px;justify-content:center;color:var(--amber);font-size:11.5px;padding:4px 0;opacity:.85;animation:rise .35s ease both}
+.entry.mark svg.ic{width:12px;height:12px}
+.entry.mark::before,.entry.mark::after{content:"";height:1px;flex:1;background:linear-gradient(90deg,transparent,var(--line2))}
+.entry.mark::after{background:linear-gradient(90deg,var(--line2),transparent)}
+
+/* 识别中 */
+#interim{display:none;padding:8px 14px;border-left:2px dashed rgba(91,140,255,.4);border-radius:12px;font-size:13px;color:var(--muted);line-height:1.6}
+#interim.show{display:block}
+#interim .caret{display:inline-block;width:2px;height:14px;background:var(--accent);vertical-align:-2px;margin-left:3px;animation:blink 1s infinite}
+
+/* 全文 */
+.fzh{font-size:14px;line-height:2;color:var(--ink);margin:0}
+.fen{font-size:12px;line-height:1.9;color:var(--muted);margin:2px 0 14px}
+.fmark{display:flex;align-items:center;gap:8px;color:var(--amber);font-size:11.5px;margin:10px 0}
+.fmark::before,.fmark::after{content:"";height:1px;flex:1;background:var(--line)}
+
+/* 术语库 */
+#g-add{display:flex;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
+#g-add input{
+  flex:1;min-width:130px;height:34px;background:rgba(255,255,255,.045);border:1px solid var(--line);
+  border-radius:10px;padding:0 12px;font-size:12.5px;
+}
+#g-add input:focus{outline:none;border-color:var(--accent)}
+#g-add .btn-add{height:34px;padding:0 14px;border-radius:10px;background:var(--accent-soft);color:#BFD2FF;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:5px;transition:.2s}
+#g-add .btn-add:hover{background:rgba(91,140,255,.26)}
+.grow{display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid var(--line);flex:none}
+.grow .gen{flex:1;font-size:12.5px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis}
+.grow .garr{width:13px;height:13px;color:var(--dim);flex:none}
+.grow .gzh{flex:1;font-size:13px;font-weight:500;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis}
+.grow .gdel{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;color:var(--dim);transition:.2s;flex:none}
+.grow .gdel:hover{color:var(--red);background:rgba(255,90,90,.1)}
+.grow .gdel svg.ic{width:13px;height:13px}
+.ghint{font-size:11.5px;color:var(--dim);padding:10px 4px;line-height:1.8}
+
+/* ─── 文字输入行 ─── */
+#manual{flex:none;overflow:hidden;max-height:0;transition:max-height .3s ease;margin:0 20px;display:flex;gap:8px}
+#manual.open{max-height:120px;margin-top:10px}
+#m-in{
+  flex:1;resize:none;height:56px;background:rgba(255,255,255,.045);border:1px solid var(--line);
+  border-radius:12px;padding:9px 12px;font-size:13px;line-height:1.5;
+}
+#m-in:focus{outline:none;border-color:var(--accent)}
+#m-send{align-self:flex-end;height:56px;padding:0 16px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--muted);font-size:12.5px;font-weight:600}
+#m-send:hover{color:#fff;border-color:var(--line2)}
+
+/* ─── 底部控制台 ─── */
+#deck{flex:none;display:flex;align-items:center;gap:10px;padding:14px 20px 18px;position:relative}
+.deckbtn{
+  height:46px;min-width:52px;padding:0 14px;border-radius:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--muted);font-size:11px;font-weight:500;transition:.2s;
+}
+.deckbtn:hover{color:var(--ink);border-color:var(--line2)}
+.deckbtn svg.ic{width:17px;height:17px}
+#main{
+  height:48px;padding:0 30px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:9px;
+  font-size:14px;font-weight:600;color:#fff;margin:0 auto;
+  background:linear-gradient(135deg,var(--accent),#7C5CFF);
+  box-shadow:0 10px 28px -8px rgba(91,140,255,.55);transition:.2s;
+}
+#main:hover{filter:brightness(1.1)}
+#main.running{background:linear-gradient(135deg,#2A3140,#232936);box-shadow:none;border:1px solid var(--line2)}
+#main svg.ic{width:17px;height:17px}
+#export-menu{
+  position:absolute;bottom:76px;right:20px;width:190px;background:#1D222B;border:1px solid var(--line2);
+  border-radius:13px;padding:6px;display:none;flex-direction:column;gap:2px;z-index:30;
+  box-shadow:0 18px 40px -10px rgba(0,0,0,.6);
+}
+#export-menu.show{display:flex}
+#export-menu button{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:9px;font-size:12.5px;color:var(--ink);text-align:left}
+#export-menu button:hover{background:rgba(255,255,255,.06)}
+#export-menu button svg.ic{width:14px;height:14px;color:var(--muted)}
+#export-menu hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+#export-menu button.danger{color:#FF9A9A}
+#export-menu button.danger svg.ic{color:#FF9A9A}
+
+/* ─── 提示条 ─── */
+#banner{display:none;flex:none;margin:10px 20px 0;padding:10px 14px;border-radius:12px;font-size:12px;line-height:1.7;background:rgba(255,170,60,.09);border:1px solid rgba(255,170,60,.25);color:#FFCE8F}
+#banner.show{display:block}
+#toast{
+  position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(16px);opacity:0;pointer-events:none;
+  background:#222834;border:1px solid var(--line2);color:var(--ink);font-size:12.5px;padding:10px 18px;border-radius:12px;
+  box-shadow:0 16px 40px -8px rgba(0,0,0,.6);transition:.3s;z-index:99;max-width:80vw;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:rgba(255,90,90,.4);color:#FFB4B4}
+
+/* ─── 设置弹窗 ─── */
+#overlay{position:fixed;inset:0;background:rgba(5,7,11,.62);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+#overlay.show{display:flex}
+#modal{
+  width:min(540px,100%);max-height:88vh;overflow-y:auto;background:#161A21;border:1px solid var(--line2);
+  border-radius:18px;padding:22px;box-shadow:0 30px 80px -20px rgba(0,0,0,.7);
+}
+#modal h2{font-size:15.5px;font-weight:700;display:flex;align-items:center;gap:8px}
+#modal h2 .iconbtn{margin-left:auto;width:28px;height:28px}
+.msec{margin-top:18px}
+.msec>label.mlab{display:block;font-size:11.5px;font-weight:600;color:var(--muted);letter-spacing:.5px;margin-bottom:8px}
+.seg{display:flex;gap:4px;background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:11px;padding:3px;width:fit-content}
+.seg button{height:32px;padding:0 16px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.seg button.active{background:var(--accent-soft);color:#fff}
+.frow{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.frow label{font-size:11.5px;color:var(--muted)}
+.frow input,.frow select{
+  height:36px;background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:10px;
+  padding:0 12px;font-size:12.5px;width:100%;
+}
+.frow input:focus,.frow select:focus{outline:none;border-color:var(--accent)}
+select{appearance:auto}
+.mnote{font-size:11px;line-height:1.9;color:var(--dim);margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.mfoot{display:flex;align-items:center;gap:10px;margin-top:18px}
+#test-btn{height:36px;padding:0 14px;border-radius:10px;border:1px solid var(--line2);color:var(--muted);font-size:12px;font-weight:600}
+#test-btn:hover{color:#fff}
+#test-result{font-size:11.5px;color:var(--dim);flex:1;min-width:0}
+#test-result.ok{color:var(--green)}
+#test-result.bad{color:#FF9A9A}
+#save-btn{height:38px;padding:0 22px;border-radius:11px;background:linear-gradient(135deg,var(--accent),#7C5CFF);color:#fff;font-size:13px;font-weight:600;margin-left:auto}
+#save-btn:hover{filter:brightness(1.1)}
+
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+@keyframes shimmer{to{background-position:-200% 0}}
+@media (max-width:640px){
+  #app{height:calc(100dvh - 24px)}
+  header{gap:10px;padding:12px 14px 10px}
+  #stats,#tabs,.panel{margin-left:12px;margin-right:12px}
+  #manual,#deck{padding-left:12px;padding-right:12px}
+  #deck{flex-wrap:wrap;justify-content:center}
+  #title{max-width:none}
+  .e-meta .e-rtt{display:none}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1.5"/><rect x="14" y="4" width="4" height="16" rx="1.5"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h0a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h0a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v0a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 22V4M4 4h12l-2.5 4L16 12H4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5zM20 17v5H6.5a2.5 2.5 0 0 1 0-5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-kbd" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M8 13h8"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6"/></symbol>
+  <symbol id="i-arr" viewBox="0 0 24 24"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h8l-1 8 11-13h-8z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
+  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 12h3l3-8 4 16 4-11 2 3h4"/></symbol>
+</svg>
+
+<div id="app">
+  <header>
+    <div class="recwrap"><span class="rec" id="rec-dot"></span><span id="timer">00:00</span></div>
+    <input id="title" value="未命名会话" aria-label="会话名称" spellcheck="false">
+    <div class="hright">
+      <span class="chip" id="dir-chip" data-tooltip="识别 → 译文 方向">EN → 中文</span>
+      <span class="chip" id="engine-chip" data-tooltip="翻译引擎链路"><span class="dot"></span><span id="engine-name">检测中…</span></span>
+      <button class="iconbtn" id="settings-btn" aria-label="设置" data-tooltip="设置"><svg class="ic"><use href="#i-gear"/></svg></button>
+    </div>
+  </header>
+
+  <div id="banner"></div>
+
+  <div id="stats">
+    <div><div class="statnum" id="st-lat">—</div><div class="statlbl">翻译延迟</div></div>
+    <div><div class="statnum" id="st-segs">0</div><div class="statlbl">已译句数</div></div>
+    <div><div class="statnum" id="st-hits">0</div><div class="statlbl">术语命中</div></div>
+  </div>
+
+  <div id="tabs" role="tablist" aria-label="视图">
+    <button class="tab active" role="tab" aria-selected="true" data-tab="live">实时</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="full">全文</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="glossary">术语库</button>
+  </div>
+
+  <div class="panel active" id="panel-live">
+    <div class="scroll" id="transcript">
+      <div class="empty" id="empty-live">
+        <svg class="ic"><use href="#i-wave"/></svg><br>
+        <b>点击底部「开始收音」,同传开始</b><br>
+        播放一段英文演讲/会议音频即可实时获得中文字幕<br>也可以用底部的键盘按钮手动输入文字测试翻译
+      </div>
+      <div id="interim"><span id="interim-txt"></span><span class="caret"></span></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-full">
+    <div class="scroll" id="full-scroll">
+      <div class="empty" id="empty-full">还没有内容 — 开始收音后,这里会出现完整双语全文</div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-glossary">
+    <div class="scroll">
+      <div id="g-add">
+        <input id="g-en" placeholder="原文术语,如 latency" spellcheck="false">
+        <input id="g-zh" placeholder="固定译法,如 延迟" spellcheck="false">
+        <button class="btn-add" id="g-addbtn"><svg class="ic"><use href="#i-plus"/></svg>添加</button>
+      </div>
+      <div class="ghint">启用 LLM 翻译时,术语表会自动注入提示词强制采用;免费引擎下命中处会以 <em class="term">琥珀色</em> 高亮显示。</div>
+      <div id="g-list"></div>
+    </div>
+  </div>
+
+  <div id="manual">
+    <textarea id="m-in" placeholder="手动输入一段话,回车或点发送 → 走同一条翻译链路(Ctrl+Enter 发送)"></textarea>
+    <button id="m-send">发送</button>
+  </div>
+
+  <div id="deck">
+    <button class="deckbtn" id="kbd-btn" aria-label="文字输入" data-tooltip="文字输入"><svg class="ic"><use href="#i-kbd"/></svg><span>输入</span></button>
+    <button class="deckbtn" id="mark-btn" aria-label="标记此刻" data-tooltip="标记此刻"><svg class="ic"><use href="#i-flag"/></svg><span>标记</span></button>
+    <button id="main"><svg class="ic"><use href="#i-mic"/></svg><span id="main-lbl">开始收音</span></button>
+    <button class="deckbtn" id="glos-btn" aria-label="术语库" data-tooltip="术语库"><svg class="ic"><use href="#i-book"/></svg><span>术语</span></button>
+    <button class="deckbtn" id="export-btn" aria-label="导出" data-tooltip="导出"><svg class="ic"><use href="#i-down"/></svg><span>导出</span></button>
+    <div id="export-menu" role="menu">
+      <button id="ex-copy" role="menuitem"><svg class="ic"><use href="#i-copy"/></svg>复制全文</button>
+      <button id="ex-txt" role="menuitem"><svg class="ic"><use href="#i-down"/></svg>下载 TXT</button>
+      <button id="ex-srt" role="menuitem"><svg class="ic"><use href="#i-down"/></svg>下载 SRT 字幕</button>
+      <hr>
+      <button id="ex-clear" class="danger" role="menuitem"><svg class="ic"><use href="#i-trash"/></svg>清空本次会话</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<div id="overlay">
+  <div id="modal" role="dialog" aria-modal="true" aria-label="设置">
+    <h2><svg class="ic"><use href="#i-gear"/></svg>设置
+      <button class="iconbtn" id="modal-close" aria-label="关闭"><svg class="ic"><use href="#i-x"/></svg></button>
+    </h2>
+
+    <div class="msec">
+      <label class="mlab">翻译方向</label>
+      <div class="seg" id="dir-seg">
+        <button data-src="en" class="active">EN → 中文</button>
+        <button data-src="zh">中文 → EN</button>
+      </div>
+    </div>
+
+    <div class="msec">
+      <label class="mlab">LLM 翻译(可选,质量最佳 · 支持术语表)</label>
+      <div class="frow"><label>服务商预设</label>
+        <select id="s-preset">
+          <option value="deepseek">DeepSeek(api.deepseek.com)</option>
+          <option value="glm">智谱 GLM(open.bigmodel.cn)</option>
+          <option value="openai">OpenAI(api.openai.com)</option>
+          <option value="custom">自定义 OpenAI 兼容接口</option>
+        </select>
+      </div>
+      <div class="frow"><label>接口地址(chat/completions)</label><input id="s-base" spellcheck="false"></div>
+      <div class="frow"><label>模型</label><input id="s-model" spellcheck="false"></div>
+      <div class="frow"><label>API Key(仅保存在本机浏览器)</label><input id="s-key" type="password" spellcheck="false" placeholder="sk-…"></div>
+    </div>
+
+    <div class="mfoot">
+      <button id="test-btn">测试连接</button>
+      <span id="test-result">未填写 Key 时自动使用免费引擎:MyMemory(国内可用)→ Google(需代理)。</span>
+      <button id="save-btn">保存</button>
+    </div>
+
+    <div class="mnote">
+      · 语音识别使用浏览器自带引擎(Edge/Chrome),识别文本会发送至上述翻译服务完成翻译。<br>
+      · Chrome 的识别依赖 Google 服务,国内网络建议使用 <b>Microsoft Edge</b>;识别不可用时仍可用文字输入模式。<br>
+      · 术语库、设置保存在本机 localStorage,不会上传。
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ═══════════════ 工具 ═══════════════ */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const LS = {
+  get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+function escHtml(s) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function fmtClock(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return (h ? String(h).padStart(2, "0") + ":" : "") + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+}
+function fmtSrt(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = Math.floor(sec % 60), ms = Math.floor((sec % 1) * 1000);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
+}
+function toast(msg, err) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.toggle("err", !!err);
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 2800);
+}
+
+/* ═══════════════ 设置与术语 ═══════════════ */
+const PRESETS = {
+  deepseek: { base: "https://api.deepseek.com/chat/completions", model: "deepseek-chat" },
+  glm: { base: "https://open.bigmodel.cn/api/paas/v4/chat/completions", model: "glm-4-flash" },
+  openai: { base: "https://api.openai.com/v1/chat/completions", model: "gpt-4o-mini" }
+};
+const DEFAULTS = { src: "en", title: "未命名会话", llm: { preset: "deepseek", base: PRESETS.deepseek.base, model: PRESETS.deepseek.model, key: "" } };
+let settings = LS.get("sti.settings.v1", null) || JSON.parse(JSON.stringify(DEFAULTS));
+settings.llm = Object.assign({}, DEFAULTS.llm, settings.llm || {});
+let glossary = LS.get("sti.glossary.v1", null) || [
+  { en: "end-to-end latency", zh: "端到端延迟" },
+  { en: "on-device", zh: "端侧" },
+  { en: "keynote", zh: "主题演讲" },
+  { en: "confidence", zh: "置信度" }
+];
+
+function saveSettings() { LS.set("sti.settings.v1", settings); }
+function saveGlossary() { LS.set("sti.glossary.v1", glossary); }
+
+/* ═══════════════ 会话状态 ═══════════════ */
+const S = {
+  running: false, elapsed: 0, lastTick: 0,
+  entries: [],                       // {kind:'seg',t0,t1,src,dst,engine,ms,hits,el} | {kind:'mark',t,el}
+  stats: { rtts: [], segs: 0, hits: 0 },
+  health: {
+    llm: { fails: 0, coolUntil: 0 },
+    google: { fails: 0, coolUntil: 0, alive: null },
+    mm: { fails: 0, coolUntil: 0, alive: null }
+  }
+};
+function healthy(n) { return Date.now() > S.health[n].coolUntil; }
+function sessionSec() { return Math.floor(S.elapsed / 1000); }
+
+/* ═══════════════ 翻译引擎 ═══════════════ */
+function dstCode() { return settings.src === "en" ? "zh-CN" : "en"; }
+function dstName() { return settings.src === "en" ? "中文" : "English"; }
+
+async function engineLLM(text) {
+  const { base, model, key } = settings.llm;
+  if (!key) throw new Error("no key");
+  const ac = new AbortController();
+  const kill = setTimeout(() => ac.abort(), 20000);
+  try {
+    const sys = "你是专业同声传译。把用户输入译为" + dstName() + "。要求:只输出译文本身,不要任何解释或引号;口语化、短句、贴合同传节奏。必须采用以下术语表译法(若出现):" +
+      JSON.stringify(glossary.map(g => settings.src === "en" ? [g.en, g.zh] : [g.zh, g.en]));
+    const res = await fetch(base, {
+      method: "POST", signal: ac.signal,
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+      body: JSON.stringify({ model, temperature: 0.2, messages: [{ role: "system", content: sys }, { role: "user", content: text }] })
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    const out = (j.choices?.[0]?.message?.content || "").trim().replace(/^["'「『]|["'」』]$/g, "");
+    if (!out) throw new Error("empty");
+    return out;
+  } finally { clearTimeout(kill); }
+}
+
+async function engineGoogle(text) {
+  const ac = new AbortController();
+  const kill = setTimeout(() => ac.abort(), 4500);
+  try {
+    const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=" + settings.src +
+      "&tl=" + dstCode() + "&dt=t&q=" + encodeURIComponent(text);
+    const res = await fetch(url, { signal: ac.signal });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    const out = (j[0] || []).map(x => (x && x[0]) || "").join("");
+    if (!out) throw new Error("empty");
+    return out;
+  } finally { clearTimeout(kill); }
+}
+
+async function engineMM(text) {
+  const ac = new AbortController();
+  const kill = setTimeout(() => ac.abort(), 9000);
+  try {
+    const pair = (settings.src === "en" ? "en|zh-CN" : "zh-CN|en");
+    const url = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(text.slice(0, 480)) + "&langpair=" + pair;
+    const res = await fetch(url, { signal: ac.signal });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    const out = j?.responseData?.translatedText || "";
+    if (!out || /MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(out)) throw new Error("quota/empty");
+    return out;
+  } finally { clearTimeout(kill); }
+}
+
+async function translateText(text) {
+  const chain = [];
+  if (settings.llm.key && healthy("llm")) chain.push(["llm", engineLLM]);
+  if (healthy("google")) chain.push(["google", engineGoogle]);
+  if (healthy("mm")) chain.push(["mm", engineMM]);
+  for (const [name, fn] of chain) {
+    const t0 = performance.now();
+    try {
+      const out = await fn(text);
+      const ms = Math.round(performance.now() - t0);
+      S.health[name].fails = 0;
+      return { text: out, engine: name, ms };
+    } catch (e) {
+      const h = S.health[name];
+      h.fails++;
+      if (h.fails >= 2) h.coolUntil = Date.now() + (name === "llm" ? 5 : 3) * 60000;
+    }
+  }
+  throw new Error("全部翻译引擎失败");
+}
+
+async function probeEngines() {
+  const probe = async (name, fn) => {
+    try { await fn("ok"); S.health[name].alive = true; }
+    catch { S.health[name].alive = false; }
+    updateEngineChip();
+  };
+  probe("google", engineGoogle);
+  probe("mm", engineMM);
+}
+
+function engineLabel(n) {
+  return { llm: "LLM·" + (settings.llm.model || ""), google: "Google", mm: "MyMemory" }[n] || n;
+}
+function updateEngineChip() {
+  const el = $("#engine-name"), chip = $("#engine-chip");
+  let primary = null;
+  if (settings.llm.key && healthy("llm")) primary = "llm";
+  else if (S.health.mm.alive && healthy("mm")) primary = "mm";
+  else if (S.health.google.alive && healthy("google")) primary = "google";
+  else if (settings.llm.key) primary = "llm";
+  else if (S.health.mm.alive !== false) primary = "mm";
+  else if (S.health.google.alive !== false) primary = "google";
+  el.textContent = primary ? engineLabel(primary) : "无可用引擎";
+  chip.classList.toggle("err", !primary);
+  const st = n => S.health[n].alive === false ? "✕" : (healthy(n) ? "✓" : "冷却中");
+  chip.dataset.tooltip = "翻译链路:LLM(" + (settings.llm.key ? st("llm") : "未配置") + ") → Google(" + st("google") + ") → MyMemory(" + st("mm") + ")";
+}
+
+/* ═══════════════ 术语高亮与统计 ═══════════════ */
+function enTermRe() {
+  if (!glossary.length) return null;
+  return new RegExp("(?<![\\p{L}\\p{N}])(" + glossary.map(g => escRe(g.en)).join("|") + ")(?![\\p{L}\\p{N}])", "giu");
+}
+function wrapEn(text) {
+  let out = escHtml(text);
+  const re = enTermRe();
+  if (re) out = out.replace(re, '<em class="term">$1</em>');
+  return out;
+}
+function wrapZh(text) {
+  let out = escHtml(text);
+  if (glossary.length) {
+    const re = new RegExp("(" + glossary.map(g => escRe(g.zh)).join("|") + ")", "g");
+    out = out.replace(re, '<em class="term">$1</em>');
+  }
+  return out;
+}
+function countHits(text) {
+  const re = enTermRe();
+  if (!re) return 0;
+  return [...text.matchAll(re)].length;
+}
+
+/* ═══════════════ 渲染 ═══════════════ */
+const transcript = $("#transcript"), interimEl = $("#interim"), interimTxt = $("#interim-txt");
+let pendingT0 = null;
+
+function nearBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 80; }
+function scrollBottom(el) { el.scrollTop = el.scrollHeight; }
+
+function markLive() {
+  const segs = transcript.querySelectorAll(".entry.seg");
+  segs.forEach((el, i) => el.classList.toggle("live", i === segs.length - 1));
+}
+
+function addEntryDOM(entry) {
+  $("#empty-live")?.remove();
+  const div = document.createElement("div");
+  if (entry.kind === "mark") {
+    div.className = "entry mark";
+    div.innerHTML = '<svg class="ic"><use href="#i-flag"/></svg>标记 · ' + fmtClock(entry.t);
+  } else {
+    div.className = "entry seg";
+    div.innerHTML =
+      '<div class="e-top"><div class="e-src">' + wrapEn(entry.src) + "</div>" +
+      '<div class="e-meta"><span class="e-time">' + fmtClock(entry.t0) + "</span>" +
+      '<span class="pill"></span><span class="e-rtt"></span></div></div>' +
+      '<div class="e-dst"><span class="shimmer">翻译中…</span></div>';
+  }
+  entry.el = div;
+  transcript.insertBefore(div, interimEl);
+  markLive();
+  if (nearBottom(transcript)) scrollBottom(transcript);
+  if ($("#panel-full").classList.contains("active")) renderFull();
+}
+
+async function fillTranslation(entry) {
+  const dst = entry.el.querySelector(".e-dst");
+  const pill = entry.el.querySelector(".pill");
+  const rtt = entry.el.querySelector(".e-rtt");
+  try {
+    const r = await translateText(entry.src);
+    entry.dst = r.text; entry.engine = r.engine; entry.ms = r.ms;
+    S.stats.rtts.push(r.ms);
+    if (S.stats.rtts.length > 8) S.stats.rtts.shift();
+    dst.innerHTML = wrapZh(r.text);
+    pill.textContent = engineLabel(r.engine);
+    pill.classList.toggle("llm", r.engine === "llm");
+    rtt.textContent = (r.ms / 1000).toFixed(1) + "s";
+    updateEngineChip();
+  } catch (e) {
+    dst.classList.add("fail");
+    dst.innerHTML = "翻译失败(引擎不可用或网络受限)";
+    const b = document.createElement("button");
+    b.className = "e-retry"; b.textContent = "重试";
+    b.addEventListener("click", () => { dst.classList.remove("fail"); fillTranslation(entry); });
+    dst.appendChild(b);
+  }
+  renderStats();
+}
+
+function handleFinal(text) {
+  const now = sessionSec();
+  const entry = { kind: "seg", t0: pendingT0 ?? Math.max(0, now - 2), t1: now, src: text, hits: countHits(text) };
+  pendingT0 = null;
+  S.stats.segs++; S.stats.hits += entry.hits;
+  addEntryDOM(entry);
+  S.entries.push(entry);
+  fillTranslation(entry);
+  clearInterim();
+}
+
+function renderInterim(text) {
+  if (!pendingT0) pendingT0 = sessionSec();
+  interimTxt.textContent = text;
+  interimEl.classList.add("show");
+  if (nearBottom(transcript)) scrollBottom(transcript);
+}
+function clearInterim() { interimTxt.textContent = ""; interimEl.classList.remove("show"); }
+
+function addMark() {
+  const m = { kind: "mark", t: sessionSec() };
+  S.entries.push(m);
+  addEntryDOM(m);
+  toast("已在此刻添加标记");
+}
+
+function renderStats() {
+  const rt = S.stats.rtts;
+  $("#st-lat").textContent = rt.length ? (rt.reduce((a, b) => a + b, 0) / rt.length / 1000).toFixed(1) + "s" : "—";
+  $("#st-segs").textContent = S.stats.segs;
+  $("#st-hits").textContent = S.stats.hits;
+}
+
+function renderFull() {
+  const box = $("#full-scroll");
+  $("#empty-full")?.remove();
+  const frag = document.createDocumentFragment();
+  for (const e of S.entries) {
+    if (e.kind === "mark") {
+      const d = document.createElement("div");
+      d.className = "fmark";
+      d.innerHTML = '<svg class="ic" style="width:12px;height:12px"><use href="#i-flag"/></svg>标记 · ' + fmtClock(e.t);
+      frag.appendChild(d);
+    } else {
+      const zh = document.createElement("p"); zh.className = "fzh"; zh.innerHTML = wrapZh(e.dst || "…");
+      const en = document.createElement("p"); en.className = "fen"; en.innerHTML = wrapEn(e.src);
+      frag.appendChild(zh); frag.appendChild(en);
+    }
+  }
+  box.replaceChildren(frag);
+  scrollBottom(box);
+}
+
+function renderGlossary() {
+  const list = $("#g-list");
+  list.replaceChildren();
+  if (!glossary.length) {
+    const d = document.createElement("div");
+    d.className = "ghint"; d.textContent = "术语库为空 — 添加演讲/行业专有名词,译文将优先采用你固定的译法。";
+    list.appendChild(d);
+    return;
+  }
+  for (const g of glossary) {
+    const row = document.createElement("div");
+    row.className = "grow";
+    row.innerHTML = '<span class="gen"></span><svg class="ic garr"><use href="#i-arr"/></svg><span class="gzh"></span>' +
+      '<button class="gdel" aria-label="删除术语"><svg class="ic"><use href="#i-trash"/></svg></button>';
+    row.querySelector(".gen").textContent = g.en;
+    row.querySelector(".gzh").textContent = g.zh;
+    row.querySelector(".gdel").addEventListener("click", () => {
+      glossary = glossary.filter(x => x !== g);
+      saveGlossary(); renderGlossary();
+    });
+    list.appendChild(row);
+  }
+}
+
+/* ═══════════════ 语音识别 ═══════════════ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, wantRunning = false;
+
+function spawnRec() {
+  if (!SR) return;
+  try { rec = new SR(); } catch { return; }
+  rec.lang = settings.src === "en" ? "en-US" : "zh-CN";
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.onresult = e => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      const t = (r[0]?.transcript || "").trim();
+      if (!t) continue;
+      if (r.isFinal) handleFinal(t);
+      else interim += t;
+    }
+    if (interim) renderInterim(interim);
+  };
+  rec.onerror = e => {
+    if (e.error === "not-allowed") {
+      toast("麦克风权限被拒绝 — 请在浏览器地址栏允许麦克风后重试", true);
+      stopListening();
+    } else if (e.error === "network") {
+      toast("识别服务网络不通:Chrome 依赖 Google 服务,建议改用 Edge 浏览器", true);
+    } else if (e.error === "audio-capture") {
+      toast("未检测到麦克风设备", true);
+      stopListening();
+    }
+  };
+  rec.onend = () => {
+    if (!wantRunning) return;
+    setTimeout(() => {
+      if (!wantRunning) return;
+      try { rec.start(); } catch { spawnRec(); }
+    }, 300);
+  };
+  try { rec.start(); } catch {}
+}
+function startListening() {
+  if (!SR) { toast("当前浏览器不支持语音识别 — 可用文字输入模式,或改用 Edge/Chrome", true); return; }
+  wantRunning = true;
+  spawnRec();
+  setRunning(true);
+}
+function stopListening() {
+  wantRunning = false;
+  try { rec && rec.stop(); } catch {}
+  clearInterim();
+  setRunning(false);
+}
+function setRunning(v) {
+  S.running = v;
+  S.lastTick = performance.now();
+  $("#app").classList.toggle("on", v);
+  $("#main").classList.toggle("running", v);
+  $("#main-lbl").textContent = v ? "暂停" : "开始收音";
+  $("#main").querySelector("use").setAttribute("href", v ? "#i-pause" : "#i-mic");
+  $("#main").setAttribute("aria-label", v ? "暂停收音" : "开始收音");
+  document.title = (v ? "● " : "") + "同传工作台 · SimulCast";
+}
+
+/* ═══════════════ 计时 ═══════════════ */
+setInterval(() => {
+  const now = performance.now();
+  if (S.running) {
+    S.elapsed += now - S.lastTick;
+    $("#timer").textContent = fmtClock(sessionSec());
+  }
+  S.lastTick = now;
+}, 400);
+
+/* ═══════════════ 导出 ═══════════════ */
+function sessionLines() {
+  const dir = settings.src === "en" ? "EN → 中文" : "中文 → EN";
+  const lines = [$("#title").value + " · 同传记录 · " + new Date().toLocaleString("zh-CN") + " · " + dir, ""];
+  for (const e of S.entries) {
+    if (e.kind === "mark") lines.push("────── ⚑ 标记 " + fmtClock(e.t) + " ──────");
+    else lines.push("[" + fmtClock(e.t0) + "] " + e.src, (e.dst || "(未译)") + (e.engine ? "   —" + engineLabel(e.engine) : ""));
+  }
+  return lines.join("\n");
+}
+function download(name, content) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+async function copyAll() {
+  const text = sessionLines();
+  try { await navigator.clipboard.writeText(text); toast("已复制全文"); }
+  catch {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); ta.remove(); toast("已复制全文");
+  }
+}
+function exportSrt() {
+  const segs = S.entries.filter(e => e.kind === "seg" && e.dst);
+  if (!segs.length) { toast("还没有已翻译的内容可导出", true); return; }
+  let out = "";
+  segs.forEach((e, i) => {
+    out += (i + 1) + "\n" + fmtSrt(e.t0) + " --> " + fmtSrt(Math.max(e.t1, e.t0 + 1.5)) + "\n" + e.dst + "\n\n";
+  });
+  download(($("#title").value || "同传") + ".srt", out);
+  toast("已导出 SRT 字幕");
+}
+
+/* ═══════════════ 设置弹窗 ═══════════════ */
+const overlay = $("#overlay");
+function openModal() {
+  $("#s-preset").value = settings.llm.preset;
+  $("#s-base").value = settings.llm.base;
+  $("#s-model").value = settings.llm.model;
+  $("#s-key").value = settings.llm.key;
+  $$("#dir-seg button").forEach(b => b.classList.toggle("active", b.dataset.src === settings.src));
+  overlay.classList.add("show");
+}
+function closeModal() { overlay.classList.remove("show"); }
+
+$("#settings-btn").addEventListener("click", openModal);
+$("#modal-close").addEventListener("click", closeModal);
+overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+$("#s-preset").addEventListener("change", e => {
+  const p = PRESETS[e.target.value];
+  settings.llm.preset = e.target.value;
+  if (p) { $("#s-base").value = p.base; $("#s-model").value = p.model; }
+});
+$$("#dir-seg button").forEach(b => b.addEventListener("click", () => {
+  $$("#dir-seg button").forEach(x => x.classList.toggle("active", x === b));
+}));
+$("#test-btn").addEventListener("click", async () => {
+  const r = $("#test-result");
+  r.className = ""; r.textContent = "测试中…";
+  const bak = { ...settings.llm };
+  settings.llm = { preset: $("#s-preset").value, base: $("#s-base").value.trim(), model: $("#s-model").value.trim(), key: $("#s-key").value.trim() };
+  const t0 = performance.now();
+  try {
+    await engineLLM("hi");
+    r.className = "ok";
+    r.textContent = "✓ 连接成功," + Math.round(performance.now() - t0) + "ms";
+  } catch (e) {
+    r.className = "bad";
+    r.textContent = "✕ 失败:" + (e.message === "no key" ? "请填写 API Key" : e.message || "网络不通");
+    settings.llm = bak;
+  }
+});
+$("#save-btn").addEventListener("click", () => {
+  const prevSrc = settings.src;
+  settings.src = $("#dir-seg button.active")?.dataset.src || "en";
+  settings.llm = { preset: $("#s-preset").value, base: $("#s-base").value.trim(), model: $("#s-model").value.trim(), key: $("#s-key").value.trim() };
+  saveSettings();
+  $("#dir-chip").textContent = settings.src === "en" ? "EN → 中文" : "中文 → EN";
+  S.health.llm.fails = 0; S.health.llm.coolUntil = 0;
+  updateEngineChip();
+  if (S.running && prevSrc !== settings.src) { wantRunning = false; try { rec.stop(); } catch {}; spawnRec(); }
+  closeModal();
+  toast("设置已保存");
+});
+
+/* ═══════════════ 交互绑定 ═══════════════ */
+$("#main").addEventListener("click", () => S.running ? stopListening() : startListening());
+$("#mark-btn").addEventListener("click", addMark);
+$("#glos-btn").addEventListener("click", () => activateTab("glossary"));
+
+$("#kbd-btn").addEventListener("click", () => {
+  const m = $("#manual");
+  m.classList.toggle("open");
+  if (m.classList.contains("open")) $("#m-in").focus();
+});
+function sendManual() {
+  const v = $("#m-in").value.trim();
+  if (!v) return;
+  $("#m-in").value = "";
+  handleFinal(v);
+}
+$("#m-send").addEventListener("click", sendManual);
+$("#m-in").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendManual(); }
+});
+
+$("#g-addbtn").addEventListener("click", () => {
+  const en = $("#g-en").value.trim(), zh = $("#g-zh").value.trim();
+  if (!en || !zh) { toast("请同时填写原文与译法", true); return; }
+  if (glossary.some(g => g.en.toLowerCase() === en.toLowerCase())) { toast("该术语已存在", true); return; }
+  glossary.push({ en, zh });
+  saveGlossary(); renderGlossary();
+  $("#g-en").value = ""; $("#g-zh").value = ""; $("#g-en").focus();
+  toast("已添加术语");
+});
+$("#g-zh").addEventListener("keydown", e => { if (e.key === "Enter") $("#g-addbtn").click(); });
+
+function activateTab(name) {
+  $$(".tab").forEach(t => {
+    const on = t.dataset.tab === name;
+    t.classList.toggle("active", on);
+    t.setAttribute("aria-selected", on);
+  });
+  $$(".panel").forEach(p => p.classList.remove("active"));
+  $("#panel-" + name).classList.add("active");
+  if (name === "full") renderFull();
+  if (name === "glossary") renderGlossary();
+}
+$$(".tab").forEach(t => t.addEventListener("click", () => activateTab(t.dataset.tab)));
+
+const exMenu = $("#export-menu");
+$("#export-btn").addEventListener("click", e => { e.stopPropagation(); exMenu.classList.toggle("show"); });
+document.addEventListener("click", e => { if (!exMenu.contains(e.target)) exMenu.classList.remove("show"); });
+$("#ex-copy").addEventListener("click", () => { copyAll(); exMenu.classList.remove("show"); });
+$("#ex-txt").addEventListener("click", () => {
+  download(($("#title").value || "同传") + ".txt", sessionLines());
+  exMenu.classList.remove("show"); toast("已导出 TXT");
+});
+$("#ex-srt").addEventListener("click", () => { exportSrt(); exMenu.classList.remove("show"); });
+$("#ex-clear").addEventListener("click", () => {
+  exMenu.classList.remove("show");
+  if (!S.entries.length) return;
+  if (!confirm("确定清空本次会话的全部记录?")) return;
+  stopListening();
+  S.entries = []; S.stats = { rtts: [], segs: 0, hits: 0 }; S.elapsed = 0;
+  $("#timer").textContent = "00:00";
+  $$("#transcript .entry").forEach(el => el.remove());
+  const sc = $("#full-scroll");
+  sc.replaceChildren();
+  const emp = document.createElement("div");
+  emp.className = "empty"; emp.id = "empty-full";
+  emp.textContent = "还没有内容 — 开始收音后,这里会出现完整双语全文";
+  sc.appendChild(emp);
+  location.hash = "";
+  const live = document.createElement("div");
+  live.className = "empty"; live.id = "empty-live";
+  live.innerHTML = '<svg class="ic"><use href="#i-wave"/></svg><br><b>点击底部「开始收音」,同传开始</b><br>播放一段英文演讲/会议音频即可实时获得中文字幕<br>也可以用底部的键盘按钮手动输入文字测试翻译';
+  transcript.insertBefore(live, interimEl);
+  renderStats();
+  toast("会话已清空");
+});
+
+/* ═══════════════ 启动 ═══════════════ */
+$("#title").value = settings.title || "未命名会话";
+$("#title").addEventListener("change", () => { settings.title = $("#title").value; saveSettings(); });
+$("#dir-chip").textContent = settings.src === "en" ? "EN → 中文" : "中文 → EN";
+renderGlossary();
+renderStats();
+updateEngineChip();
+probeEngines();
+
+if (!SR) {
+  const b = $("#banner");
+  b.classList.add("show");
+  b.innerHTML = "当前浏览器不支持语音识别(Web Speech API)。请使用 <b>Microsoft Edge</b> 或 Chrome 打开;在此期间仍可通过底部「输入」按钮使用文字翻译模式。";
+} else if (location.protocol === "file:") {
+  const b = $("#banner");
+  b.classList.add("show");
+  b.innerHTML = "当前以 file:// 方式打开,浏览器可能拒绝麦克风权限。建议双击文件夹里的 <b>启动同传App.bat</b> 通过 localhost 访问。";
+}
+</script>
+</body>
+</html>
